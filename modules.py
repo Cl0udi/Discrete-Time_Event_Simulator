@@ -88,6 +88,13 @@ class Event:
 		self.time = params.get('time')
 		self.process = params.get('process')
 
+class RecordedData:
+	def __init__(self, params):
+		self.CPU_time = params.get('CPU_time')
+		self.turnaround = params.get('turnaround')
+		self.queueSize = params.get('queueSize')
+		#self.throughput = params.get('throughput')
+
 def testFirstComeFirstServe(process1, process2):
 	return process1.arrivalTime < process2.arrivalTime
 
@@ -100,5 +107,4 @@ def testHighestResponseRatioNext(process1, process2, currentTime): #(W+S)/S
 	return ((waiting_1/process1.serviceTime) + 1) > ((waiting_2/process2.arrivalTime) + 1)
 
 def getEvent(event_PriorityQueue):
-
-
+	print("ok")
