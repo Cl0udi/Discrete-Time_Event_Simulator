@@ -4,11 +4,13 @@ import time
 from multiprocessing import Queue
 from Queue import Empty
 from Queue import PriorityQueue
+# from signal import signal, SIGPIPE, SIG_DFL
+# signal(SIGPIPE,SIG_DFL) 
 
 def sim(scheduleAlgorithm = 1, lmbda = 10.0, avgServiceTime = .6, roundRobinQuantum = .01):
-	print("hello")
+	print("\nhello\n")
 	scheduleAlgorithm = md.cleanInitialInputScheduleAlgorithm(scheduleAlgorithm)
-	lmbda = md.cleanInitialInputFloatValues(lmbda, "Lambda")
+	lmbda = md.cleanInitialInputLmdaValues(lmbda)
 	avgServiceTime = md.cleanInitialInputFloatValues(avgServiceTime, "Average Service Time")
 	roundRobinQuantum = md.cleanInitialInputFloatValues(roundRobinQuantum, "Round Robin Quantum")
 
@@ -44,18 +46,11 @@ def sim(scheduleAlgorithm = 1, lmbda = 10.0, avgServiceTime = .6, roundRobinQuan
 
 			currentEvent = event_PriorityQueue.get()[1]
 			clock = currentEvent.time
-			print("Clock: " + str(clock))
-			print("Sample: " + str(processCounter))
+			# print("Sample: " + str(processCounter) + "	Queue: " + str(queueSize) + "	Clock: " + str(clock))
+			# print("IDDLE?: " + str(CPU_iddle) + "	Type: " + str(currentEvent.type))
 
 			if(currentEvent.type == "ARR"):
-				if(CPU_iddle == 1):
-					CPU_iddle = 0
-					departureEventParams = {"type" : "DEP", "time" : clock + currentEvent.process.serviceTime, "process" : currentEvent.process}
-					departureEvent = md.Event(departureEventParams)
-					event_PriorityQueue.put((departureEvent.time, departureEvent))
-				else:
-					FCFS_Queue.put(currentEvent.process)
-					queueSize += 1
+				queueSize += 1
 				# Create a new process to arrive
 				processParams.update({'id': idCounter})
 				processParams.update({'clock': clock})
@@ -64,21 +59,41 @@ def sim(scheduleAlgorithm = 1, lmbda = 10.0, avgServiceTime = .6, roundRobinQuan
 				arrivalEvent = md.Event(arrivalEventParams)
 				event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
 				idCounter += 1
-			elif(currentEvent.type == "DEP"):
-				recordedDataList.append(newRecordedData(currentEvent.process, clock, queueSize))
-				processCounter += 1
-				if(FCFS_Queue.empty()):
-					CPU_iddle = 1
-				else:
-					currentEvent = FCFS_Queue.get()
-					departureEventParams = {"type" : "DEP", "time" : clock + currentEvent.serviceTime, "process" : currentEvent}
+
+				if(CPU_iddle == 1):
+					# print("AAAAAAAAA")
+					CPU_iddle = 0
+					departureEventParams = {"type" : "DEP", "time" : clock + currentEvent.process.serviceTime, "process" : currentEvent.process}
 					departureEvent = md.Event(departureEventParams)
 					event_PriorityQueue.put((departureEvent.time, departureEvent))
 					queueSize -= 1
+				else:
+					# print("BBBBBBBBB")
+					FCFS_Queue.put(currentEvent.process)
 
-	# Update clock to final value
-	finalEvent = event_PriorityQueue.get()[1]
-	clock = finalEvent.time
+			elif(currentEvent.type == "DEP"):
+				queueSize -= 1
+				recordedDataList.append(md.newRecordedData(currentEvent.process, clock, queueSize))
+				processCounter += 1
+
+				if(FCFS_Queue.empty() == True):
+					# print("CCCCCCCCCC")
+					CPU_iddle = 1
+					queueSize += 1
+				else:
+					# print("DDDDDDDDDD")
+					queuedEvent = FCFS_Queue.get()
+					departureEventParams = {"type" : "DEP", "time" : clock + queuedEvent.serviceTime, "process" : queuedEvent}
+					departureEvent = md.Event(departureEventParams)
+					event_PriorityQueue.put((departureEvent.time, departureEvent))
+
+
+		# Update clock to final value
+		finalEvent = event_PriorityQueue.get()[1]
+		clock = finalEvent.time + finalEvent.process.serviceTime
+
+		FCFS_Queue.close()
+		FCFS_Queue.join_thread()
 
 	# Time to save the data in a readable format
 	totalCPU_UtilizationTime = 0
@@ -87,9 +102,9 @@ def sim(scheduleAlgorithm = 1, lmbda = 10.0, avgServiceTime = .6, roundRobinQuan
 	totalThroughput = 0
 
 	for data in recordedDataList:
-		print("CPU: " + str(data.CPU_time))
-		print("Turn: " + str(data.turnaround))
-		print("Queue: " + str(data.queueSize))
+		# print("CPU: " + str(data.CPU_time))
+		# print("Turn: " + str(data.turnaround))
+		# print("Queue: " + str(data.queueSize))
 		totalCPU_UtilizationTime += data.CPU_time
 		sumOfAllTurnaroundTimes += data.turnaround
 		sumOfAllQueueSizes += data.queueSize
@@ -98,11 +113,9 @@ def sim(scheduleAlgorithm = 1, lmbda = 10.0, avgServiceTime = .6, roundRobinQuan
 	print("Average turnaround time: " + str(sumOfAllTurnaroundTimes/numSamples))
 	print("Average Queue Size: " + str(sumOfAllQueueSizes/numSamples))
 	print("System Throughput: " + str(numSamples/clock))
-	print("goodbye")
+	print("\ngoodbye\n")
 
-def newRecordedData(process, clock, queueSize):
-	recordedDataParams = {"CPU_time" : process.serviceTime, "turnaround" : clock - process.arrivalTime, "queueSize" : queueSize}
-	return md.RecordedData(recordedDataParams)
+	time.sleep(0.1)
 
 if __name__ == '__main__':
     # Map command line arguments to function arguments.
