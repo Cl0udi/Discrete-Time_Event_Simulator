@@ -1,8 +1,12 @@
 import numpy as np
 import random as rn
 import csv
-from multiprocessing import Queue
+import time
 from subprocess import call
+from multiprocessing import Queue
+from Queue import Empty
+from Queue import PriorityQueue
+import heapq
 
 # Test value functions ###
 
@@ -128,7 +132,7 @@ def createArrivalEvent(processParams):
 def createDepartureEvent(process, time):
 	eventParams = {
 		"type" : "DEP",
-		"time" : time + process.serviceTime,
+		"time" : time,
 		"process" : process
 	}
 	return Event(eventParams)
@@ -230,8 +234,210 @@ def recordToCSV(params, dataType):
 			data = line_to_override.get(line, row)
 			writer.writerow(data)
 
-def FCFS_Samples(params, numSamples):
+def removeDepartures_PriorityQueue(priority_Queue):
+	queueObjectsList = []
 
+	while(priority_Queue.empty() != True):
+		queueObjectsList.append(priority_Queue.get()[1])
+
+	for queueObject in queueObjectsList:
+		if queueObject.type == "ARR":
+			priority_Queue.put((queueObject.time, queueObject))
+
+	return priority_Queue
+
+def getShortestRemainingTime(processList):
+	organizedBySRTFQueue = PriorityQueue()
+
+	for process in processList:
+		organizedBySRTFQueue.put((process.remainingTime, process))
+
+	highestPriorityProcess = organizedBySRTFQueue.get()[1]
+
+	processList.remove(highestPriorityProcess)
+
+	return highestPriorityProcess
+
+def FCFS_Samples(processParams, numSamples):
+	# Create appropriate data structures for FCFS
+	FCFS_Queue = Queue()
+	event_PriorityQueue = PriorityQueue()
+
+	# Create process counter to test end condition
+	processCounter = 0
+
+	# Queue Size to keep track of size of FCFS Queue
+	queueSize = 0
+
+	# To keep track of CPU being utilized
+	CPU_iddle = 1
+
+	# To store simulated information
+	recordedDataList = []
+
+	# If process takes more than 5 minutes, it will terminate
+	timeout = time.time() + 60*5
+
+	# Create first process and place it as an arrival at time 0 in event_PriorityQueue
+	arrivalEvent = createArrivalEvent(processParams)
+	processParams["id"] += 1
+	event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+	while(processCounter < numSamples and time.time() < timeout):
+
+		currentEvent = event_PriorityQueue.get()[1]
+		clock = currentEvent.time
+		currentProcess = currentEvent.process
+		# print("Sample: " + str(processCounter) + "	Queue: " + str(queueSize) + "	Clock: " + str(clock))
+		# print("IDDLE?: " + str(CPU_iddle) + "	Type: " + str(currentEvent.type))
+
+		if(currentEvent.type == "ARR"):
+			queueSize += 1
+
+			if(CPU_iddle == 1):
+				queueSize -= 1
+				CPU_iddle = 0
+				departureEvent = createDepartureEvent(currentProcess, clock + currentProcess.serviceTime)
+				event_PriorityQueue.put((departureEvent.time, departureEvent))
+			else:
+				FCFS_Queue.put(currentProcess)
+
+			# Create a new process to arrive
+			processParams.update({'clock': clock})
+			arrivalEvent = createArrivalEvent(processParams)
+			processParams["id"] += 1
+			event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+		elif(currentEvent.type == "DEP"):
+
+			if(FCFS_Queue.empty() == True):
+				CPU_iddle = 1
+			else:
+				queueSize -= 1
+				queuedProcess = FCFS_Queue.get()
+				departureEvent = createDepartureEvent(queuedProcess, clock + queuedProcess.serviceTime)
+				event_PriorityQueue.put((departureEvent.time, departureEvent))
+
+			# Record the data and add one to the process counter end condition
+			recordedDataList.append(newRecordedData(currentProcess, clock, queueSize))
+			processCounter += 1
+
+
+	# Update clock to final value
+	finalEvent = event_PriorityQueue.get()[1]
+	clock = finalEvent.time + finalEvent.process.serviceTime
+	processParams.update({'clock': clock})
+
+	return recordedDataList
+
+def SRTF_Samples(processParams, numSamples):
+	# Create appropriate data structures for FCFS
+	processList = []
+	event_PriorityQueue = PriorityQueue()
+
+	# Create process counter to test end condition
+	processCounter = 0
+
+	# Queue Size to keep track of size of SRTF Queue
+	queueSize = 0
+
+	# To keep track of CPU being utilized
+	CPU_iddle = 1
+
+	# To keep track of previous event times since SRTF is preemptive
+	runningProcessStartTime = 0
+	nextDepartureTime = 0
+	runningProcess = []
+
+	# To store simulated information
+	recordedDataList = []
+
+	# If process takes more than 5 minutes, it will terminate
+	timeout = time.time() + 60*5
+
+	# Create first process and place it as an arrival at time 0 in event_PriorityQueue
+	arrivalEvent = createArrivalEvent(processParams)
+	processParams["id"] += 1
+	event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+	while(processCounter < numSamples and time.time() < timeout):
+
+		currentEvent = event_PriorityQueue.get()[1]
+		clock = currentEvent.time
+		currentProcess = currentEvent.process
+		# print("Sample: " + str(processCounter) + "	Queue: " + str(queueSize) + "	Clock: " + str(clock))
+		# print("IDDLE?: " + str(CPU_iddle) + "	Type: " + str(currentEvent.type))
+
+		if(currentEvent.type == "ARR"):
+			queueSize += 1
+
+			# Add the current process to the list of considered processes that will be tested
+			processList.append(currentProcess)
+
+			# If CPU is iddle, run the process and create a departure event based on its service time
+			if(CPU_iddle == 1):
+				queueSize -= 1
+				CPU_iddle = 0
+				departureEvent = createDepartureEvent(currentProcess, clock + currentProcess.serviceTime)
+				event_PriorityQueue.put((departureEvent.time, departureEvent))
+				nextDepartureTime = clock + currentProcess.serviceTime
+				runningProcess = currentProcess
+				runningProcessStartTime = clock
+			else:
+				# If CPU is not iddle we need to check if this process should be running instead of the current one
+				# otherwise place it in the process list
+				if(nextDepartureTime > currentProcess.remainingTime + clock):
+					for processObject in processList:
+						if(processObject == runningProcess):
+							processObject.serviceTime -= clock - runningProcessStartTime
+					nextDepartureTime = clock + currentProcess.serviceTime
+					runningProcess = currentProcess
+					runningProcessStartTime = clock
+					event_PriorityQueue = removeDepartures_PriorityQueue(event_PriorityQueue)
+					departureEvent = createDepartureEvent(currentProcess, clock + currentProcess.serviceTime)
+					event_PriorityQueue.put((departureEvent.time, departureEvent))
+				else:
+					pass
+
+			# Create a new process to arrive
+			processParams.update({'clock': clock})
+			arrivalEvent = createArrivalEvent(processParams)
+			processParams["id"] += 1
+			event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+		elif(currentEvent.type == "DEP"):
+
+			#processList.remove(currentProcess)
+
+			for processObject in processList:
+						if(processObject == runningProcess):
+							processList.remove(processObject)
+
+			if not processList:
+				CPU_iddle = 1
+				nextDepartureTime = 1000000 + clock
+				runningProcess = None
+				runningProcessStartTime = 1000000 + clock
+			else:
+				queueSize -= 1
+				queuedProcess = getShortestRemainingTime(processList)
+				departureEvent = createDepartureEvent(queuedProcess, clock + queuedProcess.serviceTime)
+				event_PriorityQueue.put((departureEvent.time, departureEvent))
+				nextDepartureTime = departureEvent.time
+				runningProcess = departureEvent
+				runningProcessStartTime = clock
+
+			# Record the data and add one to the process counter end condition
+			recordedDataList.append(newRecordedData(currentProcess, clock, len(processList)))
+			processCounter += 1
+
+
+	# Update clock to final value
+	finalEvent = event_PriorityQueue.get()[1]
+	clock = finalEvent.time + finalEvent.process.serviceTime
+	processParams.update({'clock': clock})
+
+	return recordedDataList
 
 
 # def testFirstComeFirstServe(process1, process2):
