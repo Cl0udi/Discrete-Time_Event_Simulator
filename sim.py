@@ -99,6 +99,65 @@ def sim(scheduleAlgorithm = 1, lmbda = 10.0, avgServiceTime = 0.6, roundRobinQua
 		clock = finalEvent.time + finalEvent.process.serviceTime
 		processParams.update({'clock': clock})
 
+	if(scheduleAlgorithm == 2):
+		# Create appropriate data structures for FCFS
+		FCFS_Queue = Queue()
+		event_PriorityQueue = PriorityQueue()
+
+		# Create first process and place it as an arrival at time 0 in event_PriorityQueue
+		arrivalEvent = md.createArrivalEvent(processParams)
+		processParams["id"] += 1
+		event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+		while(processCounter < numSamples and time.time() < timeout):
+
+			currentEvent = event_PriorityQueue.get()[1]
+			clock = currentEvent.time
+			currentProcess = currentEvent.process
+			# print("Sample: " + str(processCounter) + "	Queue: " + str(queueSize) + "	Clock: " + str(clock))
+			# print("IDDLE?: " + str(CPU_iddle) + "	Type: " + str(currentEvent.type))
+
+			if(currentEvent.type == "ARR"):
+				queueSize += 1
+
+				if(CPU_iddle == 1):
+					queueSize -= 1
+					# print("AAAAAAAAA")
+					CPU_iddle = 0
+					departureEvent = md.createDepartureEvent(currentProcess, clock)
+					event_PriorityQueue.put((departureEvent.time, departureEvent))
+				else:
+					# print("BBBBBBBBB")
+					FCFS_Queue.put(currentProcess)
+
+				# Create a new process to arrive
+				processParams.update({'clock': clock})
+				arrivalEvent = md.createArrivalEvent(processParams)
+				processParams["id"] += 1
+				event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+			elif(currentEvent.type == "DEP"):
+
+				if(FCFS_Queue.empty() == True):
+					# print("CCCCCCCCCC")
+					CPU_iddle = 1
+				else:
+					# print("DDDDDDDDDD")
+					queueSize -= 1
+					queuedProcess = FCFS_Queue.get()
+					departureEvent = md.createDepartureEvent(queuedProcess, clock)
+					event_PriorityQueue.put((departureEvent.time, departureEvent))
+
+				# Record the data and add one to the process counter end condition
+				recordedDataList.append(md.newRecordedData(currentProcess, clock, queueSize))
+				processCounter += 1
+
+
+		# Update clock to final value
+		finalEvent = event_PriorityQueue.get()[1]
+		clock = finalEvent.time + finalEvent.process.serviceTime
+		processParams.update({'clock': clock})
+
 
 	# Time to save the data in a readable format
 	csvParams = md.interpretData(recordedDataList, processParams, numSamples)

@@ -230,6 +230,9 @@ def recordToCSV(params, dataType):
 			data = line_to_override.get(line, row)
 			writer.writerow(data)
 
+def FCFS_Samples(params, numSamples):
+
+
 
 # def testFirstComeFirstServe(process1, process2):
 # 	return process1.arrivalTime < process2.arrivalTime
