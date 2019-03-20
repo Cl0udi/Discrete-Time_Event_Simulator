@@ -34,14 +34,25 @@ def sim(scheduleAlgorithm = 1, lmbda = 10.0, avgServiceTime = 0.6, roundRobinQua
 	if(scheduleAlgorithm == 1):
 		recordedDataList = md.FCFS_Samples(processParams, numSamples)
 
-	if(scheduleAlgorithm == 2):
+	elif(scheduleAlgorithm == 2):
 		recordedDataList = md.SRTF_Samples(processParams, numSamples)
+
+	elif(scheduleAlgorithm == 3):
+		recordedDataList = md.SRTF_Samples(processParams, numSamples)
+
+	elif(scheduleAlgorithm == 4):
+		recordedDataList = md.RoundRobin_Samples(processParams, numSamples)
+
+	else:
+		print("Variable scheduleAlgorithm not in range (1-4). TERMINATING to prevent faulty data")
+		sys.exit()
 
 
 	# Time to save the data in a readable format
 	csvParams = md.interpretData(recordedDataList, processParams, numSamples)
 	md.recordToCSV(csvParams, scheduleAlgorithm)
 
+	print("Clock: " + str(processParams.get("clock")))
 	print("CPU Utilization: " + str(csvParams.get("CPU_Utilization")))
 	print("Average turnaround time: " + str(csvParams.get("avgTurnaroundTime")))
 	print("Average Queue Size: " + str(csvParams.get("avgQueueSize")))

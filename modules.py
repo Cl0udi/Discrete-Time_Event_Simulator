@@ -8,7 +8,7 @@ from Queue import Empty
 from Queue import PriorityQueue
 import heapq
 
-# Test value functions ###
+# Test input values functions ###
 
 def isValueBetweenOneAndFour(num):
 	return True if (1 <= num <= 4) else False
@@ -85,7 +85,7 @@ def cleanInitialInputFloatValues(num, name):
 
 	return float(num)
 
-# End of test value functions ###
+# End of test input values functions ###
 
 def poissonStep(num):
 	randomUniform = rn.uniform(0, 1)
@@ -137,6 +137,14 @@ def createDepartureEvent(process, time):
 	}
 	return Event(eventParams)
 
+def createRoundRobinEvent(process, time):
+	eventParams = {
+		"type" : "RR",
+		"time" : time,
+		"process" : process
+	}
+	return Event(eventParams)
+
 class RecordedData:
 	def __init__(self, params):
 		self.CPU_time = params.get('CPU_time')
@@ -150,6 +158,9 @@ def newRecordedData(process, clock, queueSize):
 		"turnaround" : clock - process.arrivalTime, 
 		"queueSize" : queueSize
 	}
+	# print("\n\nArrival: " + str(process.arrivalTime))
+	# print("Clock: " + str(clock))
+	# print("Turnaround: " + str(recordedDataParams.get("turnaround")))
 	return RecordedData(recordedDataParams)
 
 def interpretData(recordedDataList, processParams, numSamples):
@@ -166,6 +177,10 @@ def interpretData(recordedDataList, processParams, numSamples):
 		totalCPU_UtilizationTime += data.CPU_time
 		sumOfAllTurnaroundTimes += data.turnaround
 		sumOfAllQueueSizes += data.queueSize
+
+	print("totalCPU_UtilizationTime: " + str(totalCPU_UtilizationTime))
+	print("sumOfAllTurnaroundTimes: " + str(sumOfAllTurnaroundTimes))
+	print("sumOfAllQueueSizes: " + str(sumOfAllQueueSizes))
 
 	clock = processParams.get("clock")
 	CPU_Utilization = totalCPU_UtilizationTime/clock
@@ -258,6 +273,19 @@ def getShortestRemainingTime(processList):
 
 	return highestPriorityProcess
 
+def getHighestResponseRatio(processList, clock):
+	organizedByHRRNQueue = PriorityQueue()
+
+	for process in processList:
+		waiting = clock - process.arrivalTime
+		organizedByHRRNQueue.put(((waiting/process.serviceTime) + 1), process)
+
+	highestPriorityProcess = organizedByHRRNQueue.get()[1]
+
+	# processList.remove(highestPriorityProcess)
+
+	return highestPriorityProcess
+
 def FCFS_Samples(processParams, numSamples):
 	# Create appropriate data structures for FCFS
 	FCFS_Queue = Queue()
@@ -288,18 +316,15 @@ def FCFS_Samples(processParams, numSamples):
 		currentEvent = event_PriorityQueue.get()[1]
 		clock = currentEvent.time
 		currentProcess = currentEvent.process
-		# print("Sample: " + str(processCounter) + "	Queue: " + str(queueSize) + "	Clock: " + str(clock))
-		# print("IDDLE?: " + str(CPU_iddle) + "	Type: " + str(currentEvent.type))
 
 		if(currentEvent.type == "ARR"):
-			queueSize += 1
 
 			if(CPU_iddle == 1):
-				queueSize -= 1
 				CPU_iddle = 0
 				departureEvent = createDepartureEvent(currentProcess, clock + currentProcess.serviceTime)
 				event_PriorityQueue.put((departureEvent.time, departureEvent))
 			else:
+				queueSize += 1
 				FCFS_Queue.put(currentProcess)
 
 			# Create a new process to arrive
@@ -324,22 +349,20 @@ def FCFS_Samples(processParams, numSamples):
 
 
 	# Update clock to final value
-	finalEvent = event_PriorityQueue.get()[1]
-	clock = finalEvent.time + finalEvent.process.serviceTime
-	processParams.update({'clock': clock})
+	if(event_PriorityQueue.empty() == False):
+		finalEvent = event_PriorityQueue.get()[1]
+		clock = finalEvent.time + finalEvent.process.serviceTime
+		processParams.update({'clock': clock})
 
 	return recordedDataList
 
 def SRTF_Samples(processParams, numSamples):
-	# Create appropriate data structures for FCFS
+	# Create appropriate data structures for SRTF
 	processList = []
 	event_PriorityQueue = PriorityQueue()
 
 	# Create process counter to test end condition
 	processCounter = 0
-
-	# Queue Size to keep track of size of SRTF Queue
-	queueSize = 0
 
 	# To keep track of CPU being utilized
 	CPU_iddle = 1
@@ -365,18 +388,14 @@ def SRTF_Samples(processParams, numSamples):
 		currentEvent = event_PriorityQueue.get()[1]
 		clock = currentEvent.time
 		currentProcess = currentEvent.process
-		# print("Sample: " + str(processCounter) + "	Queue: " + str(queueSize) + "	Clock: " + str(clock))
-		# print("IDDLE?: " + str(CPU_iddle) + "	Type: " + str(currentEvent.type))
 
 		if(currentEvent.type == "ARR"):
-			queueSize += 1
 
 			# Add the current process to the list of considered processes that will be tested
 			processList.append(currentProcess)
 
 			# If CPU is iddle, run the process and create a departure event based on its service time
 			if(CPU_iddle == 1):
-				queueSize -= 1
 				CPU_iddle = 0
 				departureEvent = createDepartureEvent(currentProcess, clock + currentProcess.serviceTime)
 				event_PriorityQueue.put((departureEvent.time, departureEvent))
@@ -415,11 +434,11 @@ def SRTF_Samples(processParams, numSamples):
 
 			if not processList:
 				CPU_iddle = 1
+				# Create a ridiculous departure time so that it gets overiden when a new process arrives
 				nextDepartureTime = 1000000 + clock
 				runningProcess = None
 				runningProcessStartTime = 1000000 + clock
 			else:
-				queueSize -= 1
 				queuedProcess = getShortestRemainingTime(processList)
 				departureEvent = createDepartureEvent(queuedProcess, clock + queuedProcess.serviceTime)
 				event_PriorityQueue.put((departureEvent.time, departureEvent))
@@ -433,9 +452,204 @@ def SRTF_Samples(processParams, numSamples):
 
 
 	# Update clock to final value
-	finalEvent = event_PriorityQueue.get()[1]
-	clock = finalEvent.time + finalEvent.process.serviceTime
-	processParams.update({'clock': clock})
+	if(event_PriorityQueue.empty() == False):
+		finalEvent = event_PriorityQueue.get()[1]
+		clock = finalEvent.time + finalEvent.process.serviceTime
+		processParams.update({'clock': clock})
+
+	return recordedDataList
+
+def HRRN_Samples(processParams, numSamples):
+	# Create appropriate data structures for HRRN
+	processList = []
+	event_PriorityQueue = PriorityQueue()
+
+	# Create process counter to test end condition
+	processCounter = 0
+
+	# To keep track of CPU being utilized
+	CPU_iddle = 1
+
+	# To store simulated information
+	recordedDataList = []
+
+	# If process takes more than 5 minutes, it will terminate
+	timeout = time.time() + 60*5
+
+	# Create first process and place it as an arrival at time 0 in event_PriorityQueue
+	arrivalEvent = createArrivalEvent(processParams)
+	processParams["id"] += 1
+	event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+	while(processCounter < numSamples and time.time() < timeout):
+
+		currentEvent = event_PriorityQueue.get()[1]
+		clock = currentEvent.time
+		currentProcess = currentEvent.process
+
+		if(currentEvent.type == "ARR"):
+			# Add the current process to the list of considered processes that will be tested
+			processList.append(currentProcess)
+
+			# If CPU is iddle, run the process and create a departure event based on its service time
+			if(CPU_iddle == 1):
+				CPU_iddle = 0
+				departureEvent = createDepartureEvent(currentProcess, clock + currentProcess.serviceTime)
+				event_PriorityQueue.put((departureEvent.time, departureEvent))
+			else:
+				pass
+
+			# Create a new process to arrive
+			processParams.update({'clock': clock})
+			arrivalEvent = createArrivalEvent(processParams)
+			processParams["id"] += 1
+			event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+		elif(currentEvent.type == "DEP"):
+
+			# Delete process from list since it is departing
+			for processObject in processList:
+						if(processObject == runningProcess):
+							processList.remove(processObject)
+
+			if not processList:
+				# If process list is empty, the CPU becomes iddle while waiting for next process
+				CPU_iddle = 1
+			else:
+				queuedProcess = getHighestResponseRatio(processList)
+				departureEvent = createDepartureEvent(queuedProcess, clock + queuedProcess.serviceTime)
+				event_PriorityQueue.put((departureEvent.time, departureEvent))
+
+			# Record the data and add one to the process counter end condition
+			recordedDataList.append(newRecordedData(currentProcess, clock, len(processList)))
+			processCounter += 1
+
+
+	# Update clock to final value
+	if(event_PriorityQueue.empty() == False):
+		finalEvent = event_PriorityQueue.get()[1]
+		clock = finalEvent.time + finalEvent.process.serviceTime
+		processParams.update({'clock': clock})
+
+	return recordedDataList
+
+def RoundRobin_Samples(processParams, numSamples):
+	# Create appropriate data structures for RoundRobin
+	RoundRobin_Queue = Queue()
+	event_PriorityQueue = PriorityQueue()
+	QUANTUM = processParams.get("roundRobinQuantum")
+	nextQuantum = QUANTUM
+
+	# Create process counter to test end condition
+	processCounter = 0
+
+	# Queue Size to keep track of size of FCFS Queue
+	queueSize = 0
+
+	# To keep track of CPU being utilized
+	CPU_iddle = 1
+
+	# To store simulated information
+	recordedDataList = []
+
+	# If process takes more than 10 minutes, it will terminate
+	timeout = time.time() + 60*10
+
+	# Create first process and place it as an arrival at a poisson generated time in event_PriorityQueue
+	arrivalEvent = createArrivalEvent(processParams)
+	arrivalEvent.arrivalTime = 0
+	arrivalEvent.process.arrivalTime = 0
+	processParams["id"] += 1
+	event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+	while(processCounter < numSamples and time.time() < timeout):
+
+		currentEvent = event_PriorityQueue.get()[1]
+		clock = currentEvent.time
+		currentProcess = currentEvent.process
+
+		while(clock >= nextQuantum):
+			nextQuantum += QUANTUM
+
+		# print("NEXT QUANTUM: " + str(nextQuantum))
+		# print("Process Counter: " + str(processCounter))
+		# print("Queue Size: " + str(queueSize))
+		# print("Clock: " + str(clock))
+		# print("Current Process Arrival: " + str(currentProcess.arrivalTime))
+
+		if(currentEvent.type == "ARR"):
+			# print("ARR")
+
+			if(CPU_iddle == 1):
+				CPU_iddle = 0
+
+				if(clock + currentProcess.remainingTime < nextQuantum):
+					# If arriving process would finish in less than 1 Quantum, schedule a departure
+					departureTime = clock + currentProcess.remainingTime
+					departureEvent = createDepartureEvent(currentProcess, departureTime)
+					event_PriorityQueue.put((departureEvent.time, departureEvent))
+				else:
+					# Otherwise schedule it for a Round Robin round
+					roundRobinEvent = createRoundRobinEvent(currentProcess, nextQuantum)
+					event_PriorityQueue.put((roundRobinEvent.time, roundRobinEvent))
+			else:
+				# IF CPU is busy, place it at the end of Round Robin Queue
+				queueSize += 1
+				RoundRobin_Queue.put(currentProcess)
+
+			# Create a new process to arrive
+			processParams.update({'clock': clock})
+			arrivalEvent = createArrivalEvent(processParams)
+			processParams["id"] += 1
+			event_PriorityQueue.put((arrivalEvent.time, arrivalEvent))
+
+		elif(currentEvent.type == "DEP"):
+			# print("DEP")
+			if(RoundRobin_Queue.empty() == True):
+				CPU_iddle = 1
+			else:
+				queuedProcess = RoundRobin_Queue.get()
+				if(clock + queuedProcess.remainingTime < nextQuantum):
+					queueSize -= 1
+					departureTime = clock + queuedProcess.remainingTime
+					departureEvent = createDepartureEvent(queuedProcess, departureTime)
+					event_PriorityQueue.put((departureEvent.time, departureEvent))
+				else:
+					roundRobinEvent = createRoundRobinEvent(queuedProcess, clock)
+					event_PriorityQueue.put((roundRobinEvent.time, roundRobinEvent))
+
+			# Record the data and add one to the process counter end condition
+			recordedDataList.append(newRecordedData(currentProcess, clock, queueSize))
+			processCounter += 1
+
+		# Added a new type of event known as the round robin
+		# If a process still has a few more cycles before being done it will feed itself into the queue
+		# Processes are not terminated here so data is not recorded
+		elif(currentEvent.type == "RR"):
+			# print("Robin")
+			# Remove the service time the CPU performed from the remaining time 
+			currentProcess.remainingTime -= (nextQuantum - clock)
+
+			if(RoundRobin_Queue.empty() == True):
+				processOfInterest = currentProcess
+			else:
+				processOfInterest = RoundRobin_Queue.get()
+
+			if(clock + processOfInterest.remainingTime < nextQuantum):
+				departureTime = clock + processOfInterest.remainingTime
+				departureEvent = createDepartureEvent(processOfInterest, departureTime)
+				event_PriorityQueue.put((departureEvent.time, departureEvent))
+			else:
+				roundRobinEvent = createRoundRobinEvent(processOfInterest, nextQuantum)
+				event_PriorityQueue.put((roundRobinEvent.time, roundRobinEvent))
+
+
+
+	# Update clock to final value
+	if(event_PriorityQueue.empty() == False):
+		finalEvent = event_PriorityQueue.get()[1]
+		clock = finalEvent.time + finalEvent.process.serviceTime
+		processParams.update({'clock': clock})
 
 	return recordedDataList
 
