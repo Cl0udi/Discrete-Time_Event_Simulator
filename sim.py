@@ -59,7 +59,7 @@ def sim(scheduleAlgorithm = 1, lmbda = 10.0, avgServiceTime = 0.6, roundRobinQua
 	print("System Throughput: " + str(csvParams.get("systemThroughput")))
 
 
-	time.sleep(.5)
+	time.sleep(.1)
 	print("\ngoodbye\n")
 
 if __name__ == '__main__':
