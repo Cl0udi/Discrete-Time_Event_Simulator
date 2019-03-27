@@ -6,6 +6,7 @@ from subprocess import call
 from multiprocessing import Queue
 from Queue import Empty
 from Queue import PriorityQueue
+from collections import deque
 import heapq
 
 # Test input values functions ###
@@ -109,9 +110,11 @@ class Process:
 def createProcess(params):
 	processParams = {
 		"id" : params.get("id"),
-		"arrivalTime" : params.get("clock") + poissonStep2(params.get("lmbda")),
-		"serviceTime" : poissonStep2(params.get("mu"))
+		"arrivalTime" : float(params.get("clock") + poissonStep(params.get("lmbda"))),
+		"serviceTime" : float(poissonStep(params.get("mu")))
 	}
+	# print("arrivalTime  " + str(processParams.get("arrivalTime")))
+	# print("serviceTime  " + str(processParams.get("serviceTime")))
 	return Process(processParams)
 
 class Event:
@@ -181,12 +184,14 @@ def interpretData(recordedDataList, processParams, numSamples):
 	print("totalCPU_UtilizationTime: " + str(totalCPU_UtilizationTime))
 	print("sumOfAllTurnaroundTimes: " + str(sumOfAllTurnaroundTimes))
 	print("sumOfAllQueueSizes: " + str(sumOfAllQueueSizes))
+	print("CPU_IddleTime: " + str(processParams.get("CPU_IddleTime")))
 
 	clock = processParams.get("clock")
-	CPU_Utilization = totalCPU_UtilizationTime/clock
-	avgTurnaroundTime = sumOfAllTurnaroundTimes/numSamples
-	avgQueueSize = sumOfAllQueueSizes/numSamples
-	systemThroughput = numSamples/clock
+	# CPU_Utilization = float(100*totalCPU_UtilizationTime/clock)
+	CPU_Utilization = 100*(clock - processParams.get("CPU_IddleTime"))/clock
+	avgTurnaroundTime = float(sumOfAllTurnaroundTimes/numSamples)
+	avgQueueSize = float(sumOfAllQueueSizes/numSamples)
+	systemThroughput = float(numSamples/clock)
 
 	avgServiceTime = processParams.get("avgServiceTime")
 	roundRobinQuantum = processParams.get("roundRobinQuantum")
@@ -278,17 +283,16 @@ def getHighestResponseRatio(processList, clock):
 
 	for process in processList:
 		waiting = clock - process.arrivalTime
-		organizedByHRRNQueue.put(((waiting/process.serviceTime) + 1), process)
+		responseRatio = (waiting/process.serviceTime) + 1
+		organizedByHRRNQueue.put((responseRatio, process))
 
 	highestPriorityProcess = organizedByHRRNQueue.get()[1]
-
-	# processList.remove(highestPriorityProcess)
 
 	return highestPriorityProcess
 
 def FCFS_Samples(processParams, numSamples):
 	# Create appropriate data structures for FCFS
-	FCFS_Queue = Queue()
+	FCFS_Queue = deque()
 	event_PriorityQueue = PriorityQueue()
 
 	# Create process counter to test end condition
@@ -299,6 +303,8 @@ def FCFS_Samples(processParams, numSamples):
 
 	# To keep track of CPU being utilized
 	CPU_iddle = 1
+	lastCPU_UtilizationTime = 0
+	totalCPU_IdleTime = 0
 
 	# To store simulated information
 	recordedDataList = []
@@ -316,16 +322,20 @@ def FCFS_Samples(processParams, numSamples):
 		currentEvent = event_PriorityQueue.get()[1]
 		clock = currentEvent.time
 		currentProcess = currentEvent.process
+		# print("clock:" + str(clock))
+		# print("processCounter: " + str(processCounter))
+		# print("Queue Size: " + str(queueSize))
 
 		if(currentEvent.type == "ARR"):
 
 			if(CPU_iddle == 1):
 				CPU_iddle = 0
+				totalCPU_IdleTime += clock - lastCPU_UtilizationTime
 				departureEvent = createDepartureEvent(currentProcess, clock + currentProcess.serviceTime)
 				event_PriorityQueue.put((departureEvent.time, departureEvent))
 			else:
 				queueSize += 1
-				FCFS_Queue.put(currentProcess)
+				FCFS_Queue.appendleft(currentProcess)
 
 			# Create a new process to arrive
 			processParams.update({'clock': clock})
@@ -335,11 +345,12 @@ def FCFS_Samples(processParams, numSamples):
 
 		elif(currentEvent.type == "DEP"):
 
-			if(FCFS_Queue.empty() == True):
+			if(len(FCFS_Queue) == 0):
 				CPU_iddle = 1
+				lastCPU_UtilizationTime = clock
 			else:
 				queueSize -= 1
-				queuedProcess = FCFS_Queue.get()
+				queuedProcess = FCFS_Queue.pop()
 				departureEvent = createDepartureEvent(queuedProcess, clock + queuedProcess.serviceTime)
 				event_PriorityQueue.put((departureEvent.time, departureEvent))
 
@@ -354,6 +365,8 @@ def FCFS_Samples(processParams, numSamples):
 		clock = finalEvent.time + finalEvent.process.serviceTime
 		processParams.update({'clock': clock})
 
+	processParams.update({'CPU_IddleTime': totalCPU_IdleTime})
+
 	return recordedDataList
 
 def SRTF_Samples(processParams, numSamples):
@@ -366,6 +379,8 @@ def SRTF_Samples(processParams, numSamples):
 
 	# To keep track of CPU being utilized
 	CPU_iddle = 1
+	lastCPU_UtilizationTime = 0
+	totalCPU_IdleTime = 0
 
 	# To keep track of previous event times since SRTF is preemptive
 	runningProcessStartTime = 0
@@ -397,6 +412,7 @@ def SRTF_Samples(processParams, numSamples):
 			# If CPU is iddle, run the process and create a departure event based on its service time
 			if(CPU_iddle == 1):
 				CPU_iddle = 0
+				totalCPU_IdleTime += clock - lastCPU_UtilizationTime
 				departureEvent = createDepartureEvent(currentProcess, clock + currentProcess.serviceTime)
 				event_PriorityQueue.put((departureEvent.time, departureEvent))
 				nextDepartureTime = clock + currentProcess.serviceTime
@@ -434,6 +450,7 @@ def SRTF_Samples(processParams, numSamples):
 
 			if not processList:
 				CPU_iddle = 1
+				lastCPU_UtilizationTime = clock
 				# Create a ridiculous departure time so that it gets overiden when a new process arrives
 				nextDepartureTime = 1000000 + clock
 				runningProcess = None
@@ -457,6 +474,8 @@ def SRTF_Samples(processParams, numSamples):
 		clock = finalEvent.time + finalEvent.process.serviceTime
 		processParams.update({'clock': clock})
 
+	processParams.update({'CPU_IddleTime': totalCPU_IdleTime})
+
 	return recordedDataList
 
 def HRRN_Samples(processParams, numSamples):
@@ -469,6 +488,11 @@ def HRRN_Samples(processParams, numSamples):
 
 	# To keep track of CPU being utilized
 	CPU_iddle = 1
+	lastCPU_UtilizationTime = 0
+	totalCPU_IdleTime = 0
+
+	# To keep track of running process
+	runningProcess = None
 
 	# To store simulated information
 	recordedDataList = []
@@ -494,6 +518,8 @@ def HRRN_Samples(processParams, numSamples):
 			# If CPU is iddle, run the process and create a departure event based on its service time
 			if(CPU_iddle == 1):
 				CPU_iddle = 0
+				totalCPU_IdleTime += clock - lastCPU_UtilizationTime
+				runningProcess = currentProcess
 				departureEvent = createDepartureEvent(currentProcess, clock + currentProcess.serviceTime)
 				event_PriorityQueue.put((departureEvent.time, departureEvent))
 			else:
@@ -515,14 +541,18 @@ def HRRN_Samples(processParams, numSamples):
 			if not processList:
 				# If process list is empty, the CPU becomes iddle while waiting for next process
 				CPU_iddle = 1
+				lastCPU_UtilizationTime = clock
+				runningProcess = None
 			else:
-				queuedProcess = getHighestResponseRatio(processList)
+				queuedProcess = getHighestResponseRatio(processList, clock)
 				departureEvent = createDepartureEvent(queuedProcess, clock + queuedProcess.serviceTime)
 				event_PriorityQueue.put((departureEvent.time, departureEvent))
+				runningProcess = queuedProcess
 
 			# Record the data and add one to the process counter end condition
 			recordedDataList.append(newRecordedData(currentProcess, clock, len(processList)))
 			processCounter += 1
+			print("Processes left: " + str(numSamples - processCounter))
 
 
 	# Update clock to final value
@@ -531,11 +561,13 @@ def HRRN_Samples(processParams, numSamples):
 		clock = finalEvent.time + finalEvent.process.serviceTime
 		processParams.update({'clock': clock})
 
+	processParams.update({'CPU_IddleTime': totalCPU_IdleTime})
+
 	return recordedDataList
 
 def RoundRobin_Samples(processParams, numSamples):
 	# Create appropriate data structures for RoundRobin
-	RoundRobin_Queue = Queue()
+	RoundRobin_Queue = deque()
 	event_PriorityQueue = PriorityQueue()
 	QUANTUM = processParams.get("roundRobinQuantum")
 	nextQuantum = QUANTUM
@@ -548,6 +580,8 @@ def RoundRobin_Samples(processParams, numSamples):
 
 	# To keep track of CPU being utilized
 	CPU_iddle = 1
+	lastCPU_UtilizationTime = 0
+	totalCPU_IdleTime = 0
 
 	# To store simulated information
 	recordedDataList = []
@@ -582,6 +616,7 @@ def RoundRobin_Samples(processParams, numSamples):
 
 			if(CPU_iddle == 1):
 				CPU_iddle = 0
+				totalCPU_IdleTime += clock - lastCPU_UtilizationTime
 
 				if(clock + currentProcess.remainingTime < nextQuantum):
 					# If arriving process would finish in less than 1 Quantum, schedule a departure
@@ -595,7 +630,7 @@ def RoundRobin_Samples(processParams, numSamples):
 			else:
 				# IF CPU is busy, place it at the end of Round Robin Queue
 				queueSize += 1
-				RoundRobin_Queue.put(currentProcess)
+				RoundRobin_Queue.appendleft(currentProcess)
 
 			# Create a new process to arrive
 			processParams.update({'clock': clock})
@@ -605,10 +640,11 @@ def RoundRobin_Samples(processParams, numSamples):
 
 		elif(currentEvent.type == "DEP"):
 			# print("DEP")
-			if(RoundRobin_Queue.empty() == True):
+			if(len(RoundRobin_Queue) == 0):
 				CPU_iddle = 1
+				lastCPU_UtilizationTime = clock
 			else:
-				queuedProcess = RoundRobin_Queue.get()
+				queuedProcess = RoundRobin_Queue.pop()
 				if(clock + queuedProcess.remainingTime < nextQuantum):
 					queueSize -= 1
 					departureTime = clock + queuedProcess.remainingTime
@@ -630,10 +666,10 @@ def RoundRobin_Samples(processParams, numSamples):
 			# Remove the service time the CPU performed from the remaining time 
 			currentProcess.remainingTime -= (nextQuantum - clock)
 
-			if(RoundRobin_Queue.empty() == True):
+			if(len(RoundRobin_Queue) == 0):
 				processOfInterest = currentProcess
 			else:
-				processOfInterest = RoundRobin_Queue.get()
+				processOfInterest = RoundRobin_Queue.pop()
 
 			if(clock + processOfInterest.remainingTime < nextQuantum):
 				departureTime = clock + processOfInterest.remainingTime
@@ -650,6 +686,8 @@ def RoundRobin_Samples(processParams, numSamples):
 		finalEvent = event_PriorityQueue.get()[1]
 		clock = finalEvent.time + finalEvent.process.serviceTime
 		processParams.update({'clock': clock})
+
+	processParams.update({'CPU_IddleTime': totalCPU_IdleTime})
 
 	return recordedDataList
 
