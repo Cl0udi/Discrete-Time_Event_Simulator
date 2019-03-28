@@ -672,6 +672,7 @@ def RoundRobin_Samples(processParams, numSamples):
 			if(len(RoundRobin_Queue) == 0):
 				processOfInterest = currentProcess
 			else:
+				RoundRobin_Queue.appendleft(currentProcess)
 				processOfInterest = RoundRobin_Queue.pop()
 
 			if(clock + processOfInterest.remainingTime < nextQuantum):
