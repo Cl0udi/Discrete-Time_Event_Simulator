@@ -3,6 +3,7 @@
 Please make sure to include CSV FILES in the folder you run any of these programs. You can change the name of those files in modules.py->recordToCSV
 
 3	HOW TO RUN
+
 3.1	Python Files
 
 The project is written in python. It includes to main files:
