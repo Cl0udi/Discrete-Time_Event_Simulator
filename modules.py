@@ -565,7 +565,7 @@ def HRRN_Samples(processParams, numSamples):
 			# Record the data and add one to the process counter end condition
 			recordedDataList.append(newRecordedData(currentProcess, clock, len(processList)))
 			processCounter += 1
-			print("Processes left: " + str(numSamples - processCounter))
+			# print("Processes left: " + str(numSamples - processCounter))
 
 
 	# Update clock to final value
