@@ -279,14 +279,24 @@ def getShortestRemainingTime(processList):
 	return highestPriorityProcess
 
 def getHighestResponseRatio(processList, clock):
-	organizedByHRRNQueue = PriorityQueue()
+	# organizedByHRRNQueue = PriorityQueue()
+
+	# for process in processList:
+	# 	waiting = clock - process.arrivalTime
+	# 	responseRatio = -1*((waiting/process.serviceTime) + 1)
+	# 	organizedByHRRNQueue.put((responseRatio, process))
+
+	# highestPriorityProcess = organizedByHRRNQueue.get()[1]
+
+	HighestResponseRatio = 0
+	highestPriorityProcess = None
 
 	for process in processList:
 		waiting = clock - process.arrivalTime
-		responseRatio = -1*((waiting/process.serviceTime) + 1)
-		organizedByHRRNQueue.put((responseRatio, process))
-
-	highestPriorityProcess = organizedByHRRNQueue.get()[1]
+		responseRatio = ((waiting/process.serviceTime) + 1)
+		if(responseRatio > HighestResponseRatio):
+			HighestResponseRatio = responseRatio
+			highestPriorityProcess = process
 
 	return highestPriorityProcess
 
