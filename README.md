@@ -21,6 +21,7 @@ The example commands for running one test individually is as follows:
 python sim.py or python sim.py 2 15 .06 .2
 
 3.2	Batch Files
+
 	The project also includes batch files in order to run. There is one batch file for each of the scheduling algorithms. The have the following file names:
 
 1.	‘runSimFCFS.sh’: runs FCFS with lambda values from 1 to 30
@@ -32,5 +33,6 @@ The example commands for running any of the batch files is as follows:
 
 sh runSimFCFS.sh or sh runSimRoundRobin.sh
 
-3.3	Other necessary files
+3.3 Other necessary files
+
 	Please make sure to include all the existing csv files as they need to be overwritten. My program does not create new csv files and will simply say csv file not found if you attempt to run and save results without the file in the current folder.
