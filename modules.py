@@ -283,7 +283,7 @@ def getHighestResponseRatio(processList, clock):
 
 	for process in processList:
 		waiting = clock - process.arrivalTime
-		responseRatio = (waiting/process.serviceTime) + 1
+		responseRatio = -1*((waiting/process.serviceTime) + 1)
 		organizedByHRRNQueue.put((responseRatio, process))
 
 	highestPriorityProcess = organizedByHRRNQueue.get()[1]
@@ -497,8 +497,8 @@ def HRRN_Samples(processParams, numSamples):
 	# To store simulated information
 	recordedDataList = []
 
-	# If process takes more than 5 minutes, it will terminate
-	timeout = time.time() + 60*5
+	# If process takes more than 20 minutes, it will terminate
+	timeout = time.time() + 60*20
 
 	# Create first process and place it as an arrival at time 0 in event_PriorityQueue
 	arrivalEvent = createArrivalEvent(processParams)
@@ -534,9 +534,12 @@ def HRRN_Samples(processParams, numSamples):
 		elif(currentEvent.type == "DEP"):
 
 			# Delete process from list since it is departing
-			for processObject in processList:
-						if(processObject == runningProcess):
-							processList.remove(processObject)
+			# for processObject in processList:
+			# 			if(processObject == runningProcess):
+			# 				processList.remove(processObject)
+
+			if runningProcess in processList:
+				processList.remove(runningProcess)
 
 			if not processList:
 				# If process list is empty, the CPU becomes iddle while waiting for next process
